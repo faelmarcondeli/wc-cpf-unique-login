@@ -2,3 +2,5 @@
 
 Esse plugin permite login no woocommerce utilizando os campos extras do Brazil, os campos billing CPF ou CNPJ são possíveis para realização de login.
 Os campos CPF e CNPJ são checados na criação de conta para verificação de validade do mesmo, assim como é checado que é único. Não permitindo a criação de conta com documentos em duplicidade.
+Quando a opção de fazer login na finalização de compra está habilitada é possível fazer login com os mesmos campos também no formulário woocommerce-form-login
+O plugin roda apenas na página minha conta e checkout
