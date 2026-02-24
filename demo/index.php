@@ -2,6 +2,7 @@
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Content-Type: text/html; charset=UTF-8');
 
+require_once __DIR__ . '/wp-stubs.php';
 require_once __DIR__ . '/validator.php';
 
 $result = null;
@@ -11,8 +12,17 @@ $doc_type = 'cpf';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $doc_value = $_POST['document'] ?? '';
     $doc_type = $_POST['type'] ?? 'cpf';
+
+    $normalized = WC_Document_Unique_Login::normalize($doc_value);
+
     $validator = new DocumentValidator();
-    $result = $validator->validate($doc_value, $doc_type);
+    $result = $validator->validate($normalized, $doc_type);
+
+    $meta_key = ($doc_type === 'cnpj')
+        ? WC_Document_Unique_Login::META_CNPJ
+        : WC_Document_Unique_Login::META_CPF;
+    $result['meta_key'] = $meta_key;
+    $result['normalized'] = $normalized;
 }
 ?>
 <!DOCTYPE html>
@@ -38,6 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .result { margin-top: 16px; padding: 14px; border-radius: 8px; font-size: 0.95rem; }
         .result.valid { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .result.invalid { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .result .meta { font-size: 0.85rem; margin-top: 6px; opacity: 0.8; }
+        .note { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 14px; margin-bottom: 20px; font-size: 0.9rem; color: #856404; }
         .info { background: #e8f4fd; border-radius: 12px; padding: 20px; margin-top: 20px; }
         .info h3 { font-size: 1rem; margin-bottom: 10px; color: #0c5460; }
         .info ul { padding-left: 20px; }
@@ -51,7 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="container">
         <h1>WC CPF/CNPJ Unique Login</h1>
-        <p class="subtitle">WordPress/WooCommerce Plugin - Validation Demo</p>
+        <p class="subtitle">WordPress/WooCommerce Plugin - Demo</p>
+
+        <div class="note">
+            This is a standalone demo of the plugin's validation logic. The full plugin requires WordPress + WooCommerce to run, providing document-based login, AJAX validation, uniqueness checks, and field locking.
+        </div>
 
         <div class="card">
             <h2>Document Validator</h2>
@@ -65,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="form-group">
                     <label for="document">Document Number</label>
-                    <input type="text" name="document" id="document" value="<?= htmlspecialchars($doc_value) ?>" placeholder="Enter CPF or CNPJ number">
+                    <input type="text" name="document" id="document" value="<?= htmlspecialchars($doc_value) ?>" placeholder="Enter CPF or CNPJ (with or without formatting)">
                 </div>
                 <button type="submit">Validate</button>
             </form>
@@ -73,18 +89,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php if ($result !== null): ?>
                 <div class="result <?= $result['valid'] ? 'valid' : 'invalid' ?>">
                     <?= htmlspecialchars($result['message']) ?>
+                    <?php if (!empty($result['normalized'])): ?>
+                        <div class="meta">
+                            Normalized (via plugin): <?= htmlspecialchars($result['normalized']) ?>
+                            | Meta key: <?= htmlspecialchars($result['meta_key']) ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
 
         <div class="info">
-            <h3>About This Plugin</h3>
+            <h3>Plugin Features (requires WordPress + WooCommerce)</h3>
             <ul>
-                <li>Unique CPF and CNPJ validation on WooCommerce registration</li>
+                <li>Unique CPF and CNPJ enforcement on WooCommerce registration</li>
                 <li>Login using CPF/CNPJ document instead of username</li>
-                <li>AJAX real-time document validation</li>
-                <li>Document field locking after purchase</li>
-                <li>Works on My Account and Checkout pages</li>
+                <li>AJAX real-time document duplicate checking</li>
+                <li>Document field locking after first purchase</li>
+                <li>Runs on My Account and Checkout pages</li>
             </ul>
         </div>
 
