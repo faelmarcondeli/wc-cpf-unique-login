@@ -14,12 +14,14 @@ class WC_Document_Unique_Login {
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-auth.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-ajax.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-lock.php';
+        require_once WC_DOC_UL_PATH . 'includes/class-wc-document-block.php';
         
         new WC_Document_Login_UI();
         new WC_Document_Validator();
         new WC_Document_Auth();
         new WC_Document_Ajax();
         new WC_Document_Lock();
+        new WC_Document_Block();
 
         add_action( 'wp_enqueue_scripts', [ __CLASS__, 'enqueue_scripts' ] );
     }
