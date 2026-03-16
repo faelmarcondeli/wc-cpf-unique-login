@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WooCommerce CPF/CNPJ Único + Login por Documento
  * Description: CPF e CNPJ únicos, login por documento, AJAX e bloqueio após compra.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Rafael Moreno
  */
 
