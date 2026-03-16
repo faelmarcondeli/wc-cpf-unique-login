@@ -165,6 +165,6 @@ class WC_Document_Block {
      * Retorna o texto da mensagem de bloqueio.
      */
     private function get_block_message() {
-        return __( 'cliente impossibilitado de realizar login em nosso site, por favor entre em contato conosco através das opções de atendimento', 'woocommerce' );
+        return __( 'Cliente impossibilitado de realizar login em nosso site, por favor entre em contato conosco através do fale conosco', 'woocommerce' );
     }
 }
