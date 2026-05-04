@@ -5,20 +5,12 @@ defined( 'ABSPATH' ) || exit;
 class WC_Document_Auth {
 
     public function __construct() {
-
-        add_filter( 'authenticate', [ $this, 'authenticate_with_document' ], 1, 3 );
-
-        add_action( 'plugins_loaded', [ $this, 'remove_default_authenticators' ], 20 );
-    }
-
-    public function remove_default_authenticators() {
-        remove_filter( 'authenticate', 'wp_authenticate_username_password', 20 );
-        remove_filter( 'authenticate', 'wp_authenticate_email_password', 20 );
+        add_filter( 'authenticate', [ $this, 'authenticate_with_document' ], 15, 3 );
     }
 
     public function authenticate_with_document( $user, $username, $password ) {
 
-        if ( $user instanceof WP_User ) {
+        if ( $user instanceof WP_User || is_wp_error( $user ) ) {
             return $user;
         }
 
@@ -27,14 +19,14 @@ class WC_Document_Auth {
         }
 
         if ( is_email( $username ) ) {
-            return wp_authenticate_email_password( $user, $username, $password );
+            return $user;
         }
 
         $doc = WC_Document_Unique_Login::normalize( $username );
         $len = strlen( $doc );
 
         if ( ! in_array( $len, [ 11, 14 ], true ) ) {
-            return wp_authenticate_username_password( $user, $username, $password );
+            return $user;
         }
 
         $meta_key = ( $len === 11 )
@@ -46,26 +38,26 @@ class WC_Document_Auth {
         if ( ! $user_id ) {
             return new WP_Error(
                 'invalid_login',
-                __( 'Documento ou senha inválidos.', 'woocommerce' )
+                __( 'Documento ou senha inválidos.', 'wc-cpf-unique-login' )
             );
         }
 
-        $user = get_user_by( 'id', $user_id );
+        $found_user = get_user_by( 'id', $user_id );
 
-        if ( ! $user ) {
+        if ( ! $found_user ) {
             return new WP_Error(
                 'invalid_login',
-                __( 'Documento ou senha inválidos.', 'woocommerce' )
+                __( 'Documento ou senha inválidos.', 'wc-cpf-unique-login' )
             );
         }
 
-        if ( ! wp_check_password( $password, $user->user_pass, $user->ID ) ) {
+        if ( ! wp_check_password( $password, $found_user->user_pass, $found_user->ID ) ) {
             return new WP_Error(
                 'invalid_login',
-                __( 'Documento ou senha inválidos.', 'woocommerce' )
+                __( 'Documento ou senha inválidos.', 'wc-cpf-unique-login' )
             );
         }
 
-        return $user;
+        return $found_user;
     }
 }
