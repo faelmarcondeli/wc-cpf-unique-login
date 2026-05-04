@@ -10,16 +10,20 @@ class WC_Document_Lock {
 
     public function lock_fields( $fields ) {
 
-        $user_id = get_current_user_id();
-        if ( ! $user_id ) return $fields;
+        $user_id = $this->get_edited_user_id();
+        if ( ! $user_id ) {
+            return $fields;
+        }
 
-        $orders = wc_get_orders([
+        $orders = wc_get_orders( [
             'customer_id' => $user_id,
             'limit'       => 1,
             'status'      => [ 'processing', 'completed' ],
-        ]);
+        ] );
 
-        if ( empty( $orders ) ) return $fields;
+        if ( empty( $orders ) ) {
+            return $fields;
+        }
 
         foreach ( [ WC_Document_Unique_Login::META_CPF, WC_Document_Unique_Login::META_CNPJ ] as $key ) {
             if ( isset( $fields['billing']['fields'][ $key ] ) ) {
@@ -28,5 +32,18 @@ class WC_Document_Lock {
         }
 
         return $fields;
+    }
+
+    private function get_edited_user_id() {
+
+        if ( is_admin() && ! empty( $_GET['user_id'] ) ) {
+            return absint( $_GET['user_id'] );
+        }
+
+        if ( is_admin() && defined( 'IS_PROFILE_PAGE' ) && IS_PROFILE_PAGE ) {
+            return get_current_user_id();
+        }
+
+        return get_current_user_id();
     }
 }

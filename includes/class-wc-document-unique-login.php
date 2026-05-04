@@ -8,14 +8,14 @@ class WC_Document_Unique_Login {
     const META_CNPJ = 'billing_cnpj';
 
     public static function init() {
-        
+
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-login-ui.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-validator.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-auth.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-ajax.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-lock.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-block.php';
-        
+
         new WC_Document_Login_UI();
         new WC_Document_Validator();
         new WC_Document_Auth();
@@ -36,7 +36,7 @@ class WC_Document_Unique_Login {
             'wc-document-validation',
             WC_DOC_UL_URL . 'assets/js/document-validation.js',
             [ 'jquery' ],
-            '1.0',
+            WC_DOC_UL_VERSION,
             true
         );
 
@@ -51,25 +51,22 @@ class WC_Document_Unique_Login {
     }
 
     public static function get_user_by_document( $meta_key, $value ) {
-    global $wpdb;
+        global $wpdb;
 
-    // Valor SEM máscara (do login)
-    $value = preg_replace( '/[^0-9]/', '', $value );
+        $value = preg_replace( '/[^0-9]/', '', $value );
 
-    return $wpdb->get_var( $wpdb->prepare(
-        "
-        SELECT user_id
-        FROM {$wpdb->usermeta}
-        WHERE meta_key = %s
-        AND REPLACE(
-            REPLACE(
-                REPLACE(meta_value, '.', ''),
-            '-', ''),
-        '/', '') = %s
-        LIMIT 1
-        ",
-        $meta_key,
-        $value
-    ) );
+        if ( empty( $value ) ) {
+            return null;
+        }
+
+        return $wpdb->get_var( $wpdb->prepare(
+            "SELECT user_id
+             FROM {$wpdb->usermeta}
+             WHERE meta_key = %s
+               AND REPLACE(REPLACE(REPLACE(meta_value, '.', ''), '-', ''), '/', '') = %s
+             LIMIT 1",
+            $meta_key,
+            $value
+        ) );
     }
 }

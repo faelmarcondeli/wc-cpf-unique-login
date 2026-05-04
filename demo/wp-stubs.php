@@ -2,6 +2,9 @@
 
 define('ABSPATH', '/wp/');
 
+if (!defined('WC_DOC_UL_VERSION')) {
+    define('WC_DOC_UL_VERSION', '1.3.0');
+}
 if (!defined('WC_DOC_UL_PATH')) {
     define('WC_DOC_UL_PATH', dirname(__DIR__) . '/');
 }

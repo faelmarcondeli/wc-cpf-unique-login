@@ -4,6 +4,8 @@ defined( 'ABSPATH' ) || exit;
 
 class WC_Document_Login_UI {
 
+    const LOGIN_LABEL = 'CPF, CNPJ ou e-mail';
+
     private static $script_injected = false;
 
     public function __construct() {
@@ -26,8 +28,8 @@ class WC_Document_Login_UI {
             return $args;
         }
 
-        $args['label']       = __( 'CPF, CNPJ ou e-mail', 'woocommerce' );
-        $args['placeholder'] = __( 'CPF, CNPJ ou e-mail', 'woocommerce' );
+        $args['label']       = self::LOGIN_LABEL;
+        $args['placeholder'] = self::LOGIN_LABEL;
 
         return $args;
     }
@@ -38,16 +40,14 @@ class WC_Document_Login_UI {
             return $translated;
         }
 
-        $login_texts = [
-            'Nome de usuário ou e-mail',
-            'Username or email address',
-            'Username or Email Address',
-            'Username or email',
-            'Username or email address.',
-        ];
+        $normalized = strtolower( trim( $text ) );
 
-        if ( in_array( $text, $login_texts, true ) ) {
-            return 'CPF, CNPJ ou e-mail';
+        if ( strpos( $normalized, 'username' ) !== false && strpos( $normalized, 'email' ) !== false ) {
+            return self::LOGIN_LABEL;
+        }
+
+        if ( strpos( $normalized, 'nome de usu' ) !== false && strpos( $normalized, 'mail' ) !== false ) {
+            return self::LOGIN_LABEL;
         }
 
         return $translated;
@@ -60,18 +60,20 @@ class WC_Document_Login_UI {
         }
 
         self::$script_injected = true;
+        $label = esc_js( self::LOGIN_LABEL );
         ?>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
+            var loginLabel = <?php echo wp_json_encode( self::LOGIN_LABEL ); ?>;
             var fields = document.querySelectorAll('#username, .woocommerce-form-login #username');
             fields.forEach(function(field) {
-                field.setAttribute('placeholder', 'CPF, CNPJ ou e-mail');
+                field.setAttribute('placeholder', loginLabel);
                 var label = field.closest('.form-row, .woocommerce-form-row');
                 if (label) {
                     var labelEl = label.querySelector('label[for="username"]');
                     if (labelEl) {
                         var required = labelEl.querySelector('.required');
-                        labelEl.textContent = 'CPF, CNPJ ou e-mail ';
+                        labelEl.textContent = loginLabel + ' ';
                         if (required) {
                             labelEl.appendChild(required);
                         }

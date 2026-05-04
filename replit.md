@@ -4,6 +4,15 @@
 WordPress/WooCommerce plugin that provides CPF and CNPJ (Brazilian tax ID) unique validation and document-based login functionality. A standalone demo server showcases the validation logic.
 
 ## Recent Changes
+- 2026-05-04: Revisão completa de consistência do plugin (v1.3.0)
+  - Adicionada verificação de dependência do WooCommerce no bootstrap
+  - Corrigido lock de campos para usar o ID do cliente editado (não do admin)
+  - Substituído matching de texto hardcoded no login UI por busca parcial robusta
+  - Trocadas classes CSS de tema por sistema de notices do WooCommerce
+  - Versão do script agora usa constante WC_DOC_UL_VERSION
+  - Corrigida indentação e organização em todos os arquivos
+  - Text domain padronizado para 'wc-cpf-unique-login'
+- 2026-05-04: Fix repeated validation alerts and false registration errors
 - 2026-02-24: Initial Replit setup with PHP 8.4 and demo server
 - 2026-03-16: Adicionado bloqueio de login de clientes via wp-admin (class-wc-document-block.php)
 
@@ -24,3 +33,12 @@ WordPress/WooCommerce plugin that provides CPF and CNPJ (Brazilian tax ID) uniqu
 - `class-wc-document-lock.php` - Lock document fields after purchase
 - `class-wc-document-login-ui.php` - Login form UI modifications
 - `class-wc-document-block.php` - Bloqueio de login de clientes via wp-admin com exibição de mensagem personalizada
+
+## Constants
+- `WC_DOC_UL_VERSION` - Plugin version (used for script cache busting)
+- `WC_DOC_UL_PATH` - Plugin directory path
+- `WC_DOC_UL_URL` - Plugin directory URL
+- `WC_Document_Unique_Login::META_CPF` = 'billing_cpf'
+- `WC_Document_Unique_Login::META_CNPJ` = 'billing_cnpj'
+- `WC_Document_Block::META_KEY` = 'wc_login_blocked'
+- `WC_Document_Login_UI::LOGIN_LABEL` = 'CPF, CNPJ ou e-mail'
