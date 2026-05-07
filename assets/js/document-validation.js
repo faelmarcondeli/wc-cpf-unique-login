@@ -99,8 +99,28 @@ jQuery(function ($) {
     var _alertedValue = {};
     var _ajaxTimer = {};
 
+    // Seletor amplo: pega por ID, name e atributos comuns dos plugins brasileiros
     function fieldSelector(type) {
-        return type === 'cpf' ? '#billing_cpf' : '#billing_cnpj';
+        if (type === 'cpf') {
+            return '#billing_cpf, input[name="billing_cpf"], input[name="_billing_cpf"], input.cpf';
+        }
+        return '#billing_cnpj, input[name="billing_cnpj"], input[name="_billing_cnpj"], input.cnpj';
+    }
+
+    // Seletor combinado para os listeners genéricos
+    var ALL_DOC_FIELDS = [
+        '#billing_cpf', 'input[name="billing_cpf"]', 'input[name="_billing_cpf"]', 'input.cpf',
+        '#billing_cnpj', 'input[name="billing_cnpj"]', 'input[name="_billing_cnpj"]', 'input.cnpj'
+    ].join(', ');
+
+    function detectType($field) {
+        var name = ($field.attr('name') || '').toLowerCase();
+        var id   = ($field.attr('id') || '').toLowerCase();
+        var cls  = ($field.attr('class') || '').toLowerCase();
+        if (name.indexOf('cnpj') !== -1 || id.indexOf('cnpj') !== -1 || cls.indexOf('cnpj') !== -1) {
+            return 'cnpj';
+        }
+        return 'cpf';
     }
 
     function labelFor(type) {
@@ -272,9 +292,9 @@ jQuery(function ($) {
     // ====================================================================
 
     // Aplica máscara, filtra não-dígitos e valida em tempo real
-    $(document).on('input', '#billing_cpf, #billing_cnpj', function () {
-        var type    = this.id === 'billing_cpf' ? 'cpf' : 'cnpj';
+    $(document).on('input', ALL_DOC_FIELDS, function () {
         var $field  = $(this);
+        var type    = detectType($field);
         var oldVal  = $field.val();
         var newVal  = applyMask(oldVal, type);
 
@@ -282,15 +302,12 @@ jQuery(function ($) {
             $field.val(newVal);
         }
 
-        // Limpa controles de alerta enquanto digita
         delete _alertedValue[type];
-
         validateRealTime($field, type);
     });
 
-    // Bloqueia teclas não permitidas (mantém atalhos como tab, backspace, etc.)
-    $(document).on('keypress', '#billing_cpf, #billing_cnpj', function (e) {
-        // Permite teclas de controle
+    // Bloqueia teclas não permitidas
+    $(document).on('keypress', ALL_DOC_FIELDS, function (e) {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         if (e.which === 0 || e.which === 8) return;
 
@@ -300,9 +317,42 @@ jQuery(function ($) {
         }
     });
 
+    // Garante que ao colar conteúdo, a máscara é aplicada
+    $(document).on('paste', ALL_DOC_FIELDS, function () {
+        var $field = $(this);
+        setTimeout(function () { $field.trigger('input'); }, 0);
+    });
+
     // No blur, alerta se necessário
-    $(document).on('blur', '#billing_cpf', function () { alertIfNeeded($(this), 'cpf'); });
-    $(document).on('blur', '#billing_cnpj', function () { alertIfNeeded($(this), 'cnpj'); });
+    $(document).on('blur', ALL_DOC_FIELDS, function () {
+        var $field = $(this);
+        alertIfNeeded($field, detectType($field));
+    });
+
+    // Quando o WooCommerce re-renderiza o checkout (mudança de CEP, país, frete...),
+    // re-aplica máscara e validação nos campos que aparecerem.
+    $(document.body).on('updated_checkout init_checkout country_to_state_changed updated_shipping_method', function () {
+        $(ALL_DOC_FIELDS).each(function () {
+            var $field = $(this);
+            var type   = detectType($field);
+            var oldVal = $field.val();
+            var newVal = applyMask(oldVal, type);
+            if (newVal !== oldVal) $field.val(newVal);
+            validateRealTime($field, type);
+        });
+    });
+
+    // Validação inicial em caso de campos pré-preenchidos
+    $(function () {
+        $(ALL_DOC_FIELDS).each(function () {
+            var $field = $(this);
+            var type   = detectType($field);
+            if (!$field.val()) return;
+            var newVal = applyMask($field.val(), type);
+            if (newVal !== $field.val()) $field.val(newVal);
+            validateRealTime($field, type);
+        });
+    });
 
     // Bloqueio de submit dos formulários do WooCommerce
     var formSelectors = [
@@ -321,8 +371,8 @@ jQuery(function ($) {
 
         if ($form.data('wcDocSubmitting')) return;
 
-        var $cpf  = $form.find('#billing_cpf');
-        var $cnpj = $form.find('#billing_cnpj');
+        var $cpf  = $form.find(fieldSelector('cpf'));
+        var $cnpj = $form.find(fieldSelector('cnpj'));
 
         if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) return;
 
@@ -343,8 +393,8 @@ jQuery(function ($) {
         var $form = $('form.checkout');
         if (!$form.length) return true;
 
-        var $cpf  = $form.find('#billing_cpf');
-        var $cnpj = $form.find('#billing_cnpj');
+        var $cpf  = $form.find(fieldSelector('cpf'));
+        var $cnpj = $form.find(fieldSelector('cnpj'));
 
         if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) return true;
 
