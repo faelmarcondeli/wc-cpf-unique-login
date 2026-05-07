@@ -1,9 +1,103 @@
 jQuery(function ($) {
 
-    // Estado por tipo: 'valid' | 'invalid' | 'exists' | 'unknown'
+    // ====================================================================
+    // ALGORITMOS DE VALIDAÇÃO (mesmos do PHP, replicados no front)
+    // ====================================================================
+
+    function onlyDigits(value) {
+        return String(value || '').replace(/\D/g, '');
+    }
+
+    function isValidCPF(cpf) {
+        cpf = onlyDigits(cpf);
+        if (cpf.length !== 11) return false;
+        if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+        for (var t = 9; t < 11; t++) {
+            var sum = 0;
+            for (var i = 0; i < t; i++) {
+                sum += parseInt(cpf.charAt(i), 10) * ((t + 1) - i);
+            }
+            var digit = ((10 * sum) % 11) % 10;
+            if (parseInt(cpf.charAt(t), 10) !== digit) return false;
+        }
+        return true;
+    }
+
+    function isValidCNPJ(cnpj) {
+        cnpj = onlyDigits(cnpj);
+        if (cnpj.length !== 14) return false;
+        if (/^(\d)\1{13}$/.test(cnpj)) return false;
+
+        var w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+        var w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+        var sum = 0;
+        for (var i = 0; i < 12; i++) sum += parseInt(cnpj.charAt(i), 10) * w1[i];
+        var d1 = (sum % 11 < 2) ? 0 : 11 - (sum % 11);
+        if (parseInt(cnpj.charAt(12), 10) !== d1) return false;
+
+        sum = 0;
+        for (var j = 0; j < 13; j++) sum += parseInt(cnpj.charAt(j), 10) * w2[j];
+        var d2 = (sum % 11 < 2) ? 0 : 11 - (sum % 11);
+        return parseInt(cnpj.charAt(13), 10) === d2;
+    }
+
+    function isValidDoc(value, type) {
+        return type === 'cnpj' ? isValidCNPJ(value) : isValidCPF(value);
+    }
+
+    // ====================================================================
+    // MÁSCARAS DE FORMATAÇÃO
+    // ====================================================================
+
+    function maskCPF(value) {
+        value = onlyDigits(value).slice(0, 11);
+        if (value.length > 9) {
+            return value.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+        }
+        if (value.length > 6) {
+            return value.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+        }
+        if (value.length > 3) {
+            return value.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+        }
+        return value;
+    }
+
+    function maskCNPJ(value) {
+        value = onlyDigits(value).slice(0, 14);
+        if (value.length > 12) {
+            return value.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
+        }
+        if (value.length > 8) {
+            return value.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+        }
+        if (value.length > 5) {
+            return value.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+        }
+        if (value.length > 2) {
+            return value.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+        }
+        return value;
+    }
+
+    function applyMask(value, type) {
+        return type === 'cnpj' ? maskCNPJ(value) : maskCPF(value);
+    }
+
+    function expectedLength(type) {
+        return type === 'cnpj' ? 14 : 11;
+    }
+
+    // ====================================================================
+    // ESTADO E AJAX (verificação de duplicidade)
+    // ====================================================================
+
     var _state = { cpf: 'unknown', cnpj: 'unknown' };
     var _lastValidatedValue = {};
     var _alertedValue = {};
+    var _ajaxTimer = {};
 
     function fieldSelector(type) {
         return type === 'cpf' ? '#billing_cpf' : '#billing_cnpj';
@@ -14,20 +108,21 @@ jQuery(function ($) {
     }
 
     function messageFor(state, type) {
-        if (state === 'invalid') {
-            return labelFor(type) + ' inválido. Verifique os dígitos digitados.';
-        }
-        if (state === 'exists') {
-            return labelFor(type) + ' já cadastrado.';
-        }
+        if (state === 'invalid') return labelFor(type) + ' inválido. Verifique os dígitos digitados.';
+        if (state === 'exists')  return labelFor(type) + ' já cadastrado.';
         return '';
     }
 
-    /**
-     * Faz a validação AJAX. Retorna uma Promise que resolve com o estado.
-     */
-    function validateDocumentAjax(value, type) {
+    function setVisual($field, state) {
+        $field.removeClass('woocommerce-invalid woocommerce-validated');
+        if (state === 'invalid' || state === 'exists') {
+            $field.addClass('woocommerce-invalid');
+        } else if (state === 'valid') {
+            $field.addClass('woocommerce-validated');
+        }
+    }
 
+    function checkExistsAjax(value, type) {
         return $.ajax({
             url: wcDocUL.ajax_url,
             method: 'POST',
@@ -38,13 +133,8 @@ jQuery(function ($) {
                 type:   type
             }
         }).then(function (res) {
-
-            if (!res || !res.success) {
-                return 'unknown';
-            }
-
+            if (!res || !res.success) return 'unknown';
             var data = res.data || {};
-
             if (data.valid === false) return 'invalid';
             if (data.exists === true) return 'exists';
             return 'valid';
@@ -53,125 +143,168 @@ jQuery(function ($) {
         });
     }
 
-    /**
-     * Atualiza visual e estado interno após validação.
-     */
-    function applyValidationResult($field, type, state, value, opts) {
+    // ====================================================================
+    // VALIDAÇÃO EM TEMPO REAL (digitação)
+    // ====================================================================
 
-        opts = opts || {};
-        _state[type] = state;
-        _lastValidatedValue[type] = value;
+    function validateRealTime($field, type) {
 
-        if (state === 'invalid' || state === 'exists') {
-            $field.addClass('woocommerce-invalid').removeClass('woocommerce-validated');
+        var raw = onlyDigits($field.val());
 
-            if (opts.alert && _alertedValue[type] !== value) {
-                _alertedValue[type] = value;
-                window.alert(messageFor(state, type));
-            }
-        } else if (state === 'valid') {
-            $field.removeClass('woocommerce-invalid').addClass('woocommerce-validated');
-            delete _alertedValue[type];
-        } else {
-            $field.removeClass('woocommerce-invalid woocommerce-validated');
-        }
-    }
-
-    /**
-     * Valida o campo via AJAX (usado no blur). Mostra alerta se inválido.
-     */
-    function validateOnBlur($field, type) {
-
-        var value = $field.val();
-        if (!value) {
+        // Vazio: limpa estado
+        if (!raw) {
             _state[type] = 'unknown';
+            setVisual($field, 'unknown');
             return;
         }
 
-        // Se já validou esse mesmo valor, não revalida
-        if (_lastValidatedValue[type] === value && _state[type] !== 'unknown') {
-            if ((_state[type] === 'invalid' || _state[type] === 'exists') && _alertedValue[type] !== value) {
-                _alertedValue[type] = value;
-                window.alert(messageFor(_state[type], type));
+        // Comprimento incompleto: ainda digitando, sem feedback negativo
+        if (raw.length < expectedLength(type)) {
+            _state[type] = 'unknown';
+            $field.removeClass('woocommerce-invalid woocommerce-validated');
+            return;
+        }
+
+        // Comprimento completo: valida algoritmo localmente (instantâneo)
+        if (!isValidDoc(raw, type)) {
+            _state[type] = 'invalid';
+            _lastValidatedValue[type] = raw;
+            setVisual($field, 'invalid');
+            return;
+        }
+
+        // Algoritmo OK: marca como válido e dispara checagem AJAX de duplicidade (debounced)
+        _state[type] = 'valid';
+        _lastValidatedValue[type] = raw;
+        setVisual($field, 'valid');
+
+        if (_ajaxTimer[type]) clearTimeout(_ajaxTimer[type]);
+        _ajaxTimer[type] = setTimeout(function () {
+            checkExistsAjax(raw, type).then(function (state) {
+                if (onlyDigits($field.val()) !== raw) return;
+                _state[type] = state;
+                _lastValidatedValue[type] = raw;
+                setVisual($field, state);
+            });
+        }, 400);
+    }
+
+    // ====================================================================
+    // BLUR: alerta se inválido/duplicado
+    // ====================================================================
+
+    function alertIfNeeded($field, type) {
+        var raw = onlyDigits($field.val());
+        if (!raw) return;
+
+        if (raw.length !== expectedLength(type)) {
+            _state[type] = 'invalid';
+            setVisual($field, 'invalid');
+            if (_alertedValue[type] !== raw) {
+                _alertedValue[type] = raw;
+                window.alert(labelFor(type) + ' deve ter ' + expectedLength(type) + ' dígitos.');
             }
             return;
         }
 
-        validateDocumentAjax(value, type).then(function (state) {
-            // Se o usuário mudou o valor durante a requisição, ignora
-            if ($field.val() !== value) return;
-            applyValidationResult($field, type, state, value, { alert: true });
-        });
+        var state = _state[type];
+        if ((state === 'invalid' || state === 'exists') && _alertedValue[type] !== raw) {
+            _alertedValue[type] = raw;
+            window.alert(messageFor(state, type));
+        }
     }
 
-    /**
-     * Valida todos os campos de documento presentes no formulário antes do submit.
-     * Retorna uma Promise que resolve com true (pode enviar) ou false (bloqueado).
-     */
+    // ====================================================================
+    // VALIDAÇÃO NO SUBMIT (bloqueia envio)
+    // ====================================================================
+
     function validateBeforeSubmit($form) {
 
         var promises = [];
-        var hasError = false;
-        var firstErrorMessage = '';
+        var firstError = '';
 
         ['cpf', 'cnpj'].forEach(function (type) {
             var $field = $form.find(fieldSelector(type));
             if (!$field.length) return;
 
-            var value = $field.val();
-            if (!value) return;
+            var raw = onlyDigits($field.val());
+            if (!raw) return;
 
-            // Se já temos resultado para esse valor, usa
-            if (_lastValidatedValue[type] === value && _state[type] !== 'unknown') {
-                if (_state[type] === 'invalid' || _state[type] === 'exists') {
-                    hasError = true;
-                    if (!firstErrorMessage) firstErrorMessage = messageFor(_state[type], type);
-                    $field.addClass('woocommerce-invalid');
-                }
+            // Comprimento errado
+            if (raw.length !== expectedLength(type)) {
+                _state[type] = 'invalid';
+                setVisual($field, 'invalid');
+                if (!firstError) firstError = labelFor(type) + ' deve ter ' + expectedLength(type) + ' dígitos.';
                 return;
             }
 
-            // Caso contrário, valida agora
+            // Algoritmo
+            if (!isValidDoc(raw, type)) {
+                _state[type] = 'invalid';
+                setVisual($field, 'invalid');
+                if (!firstError) firstError = messageFor('invalid', type);
+                return;
+            }
+
+            // Duplicidade via AJAX
             promises.push(
-                validateDocumentAjax(value, type).then(function (state) {
-                    applyValidationResult($field, type, state, value);
-                    if (state === 'invalid' || state === 'exists') {
-                        hasError = true;
-                        if (!firstErrorMessage) firstErrorMessage = messageFor(state, type);
+                checkExistsAjax(raw, type).then(function (state) {
+                    _state[type] = state;
+                    setVisual($field, state);
+                    if ((state === 'invalid' || state === 'exists') && !firstError) {
+                        firstError = messageFor(state, type);
                     }
                 })
             );
         });
 
         return $.when.apply($, promises).then(function () {
-            if (hasError) {
-                window.alert(firstErrorMessage);
+            if (firstError) {
+                window.alert(firstError);
                 return false;
             }
             return true;
         });
     }
 
-    // ---- Listeners de blur (validação em tempo real) ----
-    $(document).on('blur', '#billing_cpf', function () {
-        validateOnBlur($(this), 'cpf');
-    });
+    // ====================================================================
+    // LISTENERS
+    // ====================================================================
 
-    $(document).on('blur', '#billing_cnpj', function () {
-        validateOnBlur($(this), 'cnpj');
-    });
-
-    // ---- Reset ao editar o campo ----
+    // Aplica máscara, filtra não-dígitos e valida em tempo real
     $(document).on('input', '#billing_cpf, #billing_cnpj', function () {
-        var type = this.id === 'billing_cpf' ? 'cpf' : 'cnpj';
-        _state[type] = 'unknown';
-        delete _lastValidatedValue[type];
+        var type    = this.id === 'billing_cpf' ? 'cpf' : 'cnpj';
+        var $field  = $(this);
+        var oldVal  = $field.val();
+        var newVal  = applyMask(oldVal, type);
+
+        if (newVal !== oldVal) {
+            $field.val(newVal);
+        }
+
+        // Limpa controles de alerta enquanto digita
         delete _alertedValue[type];
-        $(this).removeClass('woocommerce-invalid woocommerce-validated');
+
+        validateRealTime($field, type);
     });
 
-    // ---- Bloqueio de submit nos formulários do WooCommerce ----
-    // Cobre: registro (My Account), edição de conta, e qualquer form com campos billing_cpf/cnpj
+    // Bloqueia teclas não permitidas (mantém atalhos como tab, backspace, etc.)
+    $(document).on('keypress', '#billing_cpf, #billing_cnpj', function (e) {
+        // Permite teclas de controle
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.which === 0 || e.which === 8) return;
+
+        var ch = String.fromCharCode(e.which);
+        if (!/[0-9]/.test(ch)) {
+            e.preventDefault();
+        }
+    });
+
+    // No blur, alerta se necessário
+    $(document).on('blur', '#billing_cpf', function () { alertIfNeeded($(this), 'cpf'); });
+    $(document).on('blur', '#billing_cnpj', function () { alertIfNeeded($(this), 'cnpj'); });
+
+    // Bloqueio de submit dos formulários do WooCommerce
     var formSelectors = [
         'form.woocommerce-form-register',
         'form.register',
@@ -186,17 +319,12 @@ jQuery(function ($) {
 
         var $form = $(this);
 
-        // Marca o formulário para evitar loop
-        if ($form.data('wcDocSubmitting')) {
-            return;
-        }
+        if ($form.data('wcDocSubmitting')) return;
 
         var $cpf  = $form.find('#billing_cpf');
         var $cnpj = $form.find('#billing_cnpj');
 
-        if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) {
-            return;
-        }
+        if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) return;
 
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -209,8 +337,7 @@ jQuery(function ($) {
         });
     });
 
-    // ---- Bloqueio do botão "Finalizar compra" do checkout ----
-    // O WooCommerce checkout não usa submit normal — usa AJAX via 'checkout_place_order'.
+    // Bloqueio do checkout AJAX do WooCommerce
     $(document).on('checkout_place_order', function () {
 
         var $form = $('form.checkout');
@@ -219,33 +346,36 @@ jQuery(function ($) {
         var $cpf  = $form.find('#billing_cpf');
         var $cnpj = $form.find('#billing_cnpj');
 
-        if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) {
-            return true;
-        }
+        if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) return true;
 
-        // Se já validamos os valores atuais e estão OK, libera
-        var allChecked = true;
+        // Validação síncrona local (algoritmo + comprimento)
+        var blocked = false;
+        var firstError = '';
         ['cpf', 'cnpj'].forEach(function (type) {
             var $field = $form.find(fieldSelector(type));
             if (!$field.length || !$field.val()) return;
-            if (_lastValidatedValue[type] !== $field.val() || _state[type] === 'unknown') {
-                allChecked = false;
-            }
-            if (_state[type] === 'invalid' || _state[type] === 'exists') {
-                allChecked = false;
+            var raw = onlyDigits($field.val());
+
+            if (raw.length !== expectedLength(type)) {
+                blocked = true;
+                if (!firstError) firstError = labelFor(type) + ' deve ter ' + expectedLength(type) + ' dígitos.';
+                setVisual($field, 'invalid');
+            } else if (!isValidDoc(raw, type)) {
+                blocked = true;
+                if (!firstError) firstError = messageFor('invalid', type);
+                setVisual($field, 'invalid');
+            } else if (_state[type] === 'exists') {
+                blocked = true;
+                if (!firstError) firstError = messageFor('exists', type);
+                setVisual($field, 'exists');
             }
         });
 
-        if (allChecked) return true;
+        if (blocked) {
+            window.alert(firstError);
+            return false;
+        }
 
-        // Caso contrário, dispara validação assíncrona e bloqueia esse submit
-        validateBeforeSubmit($form).then(function (canSubmit) {
-            if (canSubmit) {
-                $form.data('wcDocSubmitting', true);
-                $('#place_order').trigger('click');
-            }
-        });
-
-        return false;
+        return true;
     });
 });
