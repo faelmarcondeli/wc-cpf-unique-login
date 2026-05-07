@@ -134,11 +134,11 @@ jQuery(function ($) {
     }
 
     function setVisual($field, state) {
-        $field.removeClass('woocommerce-invalid woocommerce-validated');
+        $field.removeClass('woocommerce-invalid woocommerce-validated wc-doc-invalid wc-doc-valid');
         if (state === 'invalid' || state === 'exists') {
-            $field.addClass('woocommerce-invalid');
+            $field.addClass('woocommerce-invalid wc-doc-invalid');
         } else if (state === 'valid') {
-            $field.addClass('woocommerce-validated');
+            $field.addClass('woocommerce-validated wc-doc-valid');
         }
     }
 
@@ -306,7 +306,7 @@ jQuery(function ($) {
         validateRealTime($field, type);
     });
 
-    // Bloqueia teclas não permitidas
+    // Bloqueia teclas não permitidas (keypress - fallback para browsers antigos)
     $(document).on('keypress', ALL_DOC_FIELDS, function (e) {
         if (e.ctrlKey || e.metaKey || e.altKey) return;
         if (e.which === 0 || e.which === 8) return;
@@ -316,6 +316,18 @@ jQuery(function ($) {
             e.preventDefault();
         }
     });
+
+    // beforeinput - bloqueio mais robusto e moderno (intercepta antes de modificar o valor)
+    document.addEventListener('beforeinput', function (e) {
+        var t = e.target;
+        if (!t || !t.matches) return;
+        if (!t.matches(ALL_DOC_FIELDS)) return;
+        if (e.inputType && e.inputType.indexOf('insert') === 0 && e.data) {
+            if (!/^\d+$/.test(e.data)) {
+                e.preventDefault();
+            }
+        }
+    }, true);
 
     // Garante que ao colar conteúdo, a máscara é aplicada
     $(document).on('paste', ALL_DOC_FIELDS, function () {
@@ -342,17 +354,54 @@ jQuery(function ($) {
         });
     });
 
-    // Validação inicial em caso de campos pré-preenchidos
-    $(function () {
-        $(ALL_DOC_FIELDS).each(function () {
-            var $field = $(this);
-            var type   = detectType($field);
-            if (!$field.val()) return;
+    // Aplica atributos de teclado numérico e revalida campo
+    function setupField(field) {
+        var $field = $(field);
+        if ($field.data('wcDocSetup')) return;
+        $field.data('wcDocSetup', true);
+
+        var type = detectType($field);
+        $field.attr('inputmode', 'numeric');
+        $field.attr('autocomplete', 'off');
+        $field.attr('maxlength', type === 'cnpj' ? 18 : 14);
+
+        if ($field.val()) {
             var newVal = applyMask($field.val(), type);
             if (newVal !== $field.val()) $field.val(newVal);
             validateRealTime($field, type);
+        }
+    }
+
+    function setupAllFields() {
+        $(ALL_DOC_FIELDS).each(function () { setupField(this); });
+    }
+
+    // Validação inicial em campos pré-preenchidos
+    $(function () { setupAllFields(); });
+
+    // MutationObserver: detecta campos adicionados dinamicamente (block checkout, AJAX, etc)
+    if (typeof MutationObserver !== 'undefined') {
+        var observer = new MutationObserver(function (mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                var added = mutations[i].addedNodes;
+                if (!added || !added.length) continue;
+                for (var j = 0; j < added.length; j++) {
+                    var node = added[j];
+                    if (node.nodeType !== 1) continue;
+                    if (node.matches && node.matches(ALL_DOC_FIELDS)) {
+                        setupField(node);
+                    }
+                    if (node.querySelectorAll) {
+                        var nested = node.querySelectorAll(ALL_DOC_FIELDS);
+                        for (var k = 0; k < nested.length; k++) {
+                            setupField(nested[k]);
+                        }
+                    }
+                }
+            }
         });
-    });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
 
     // Bloqueio de submit dos formulários do WooCommerce
     var formSelectors = [

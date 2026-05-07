@@ -10,7 +10,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WC_DOC_UL_VERSION', '1.3.0' );
+define( 'WC_DOC_UL_VERSION', '1.4.0' );
 define( 'WC_DOC_UL_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WC_DOC_UL_URL', plugin_dir_url( __FILE__ ) );
 

@@ -44,6 +44,22 @@ class WC_Document_Unique_Login {
             'ajax_url' => admin_url( 'admin-ajax.php' ),
             'nonce'    => wp_create_nonce( 'wc_doc_ul' ),
         ]);
+
+        // CSS inline para garantir que o feedback visual apareça mesmo se o tema sobrescrever
+        $css = '
+            input.wc-doc-invalid,
+            input.woocommerce-invalid#billing_cpf,
+            input.woocommerce-invalid#billing_cnpj {
+                border: 2px solid #d63638 !important;
+                background-color: #fff5f5 !important;
+            }
+            input.wc-doc-valid,
+            input.woocommerce-validated#billing_cpf,
+            input.woocommerce-validated#billing_cnpj {
+                border: 2px solid #00a32a !important;
+            }
+        ';
+        wp_add_inline_style( 'woocommerce-general', $css );
     }
 
     public static function normalize( $value ) {
