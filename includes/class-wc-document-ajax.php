@@ -17,7 +17,16 @@ class WC_Document_Ajax {
         $type = sanitize_text_field( $_POST['type'] ?? '' );
 
         if ( empty( $doc ) ) {
-            wp_send_json_success( [ 'exists' => false ] );
+            wp_send_json_success( [ 'exists' => false, 'valid' => true ] );
+        }
+
+        // Validação dos dígitos verificadores (algoritmo CPF/CNPJ).
+        $is_valid = $type === 'cnpj'
+            ? WC_Document_Unique_Login::is_valid_cnpj( $doc )
+            : WC_Document_Unique_Login::is_valid_cpf( $doc );
+
+        if ( ! $is_valid ) {
+            wp_send_json_success( [ 'exists' => false, 'valid' => false ] );
         }
 
         $meta_key = $type === 'cnpj'
@@ -28,9 +37,9 @@ class WC_Document_Ajax {
         $current_user  = get_current_user_id();
 
         if ( ! $found_user_id || ( $current_user && (int) $found_user_id === (int) $current_user ) ) {
-            wp_send_json_success( [ 'exists' => false ] );
+            wp_send_json_success( [ 'exists' => false, 'valid' => true ] );
         }
 
-        wp_send_json_success( [ 'exists' => true ] );
+        wp_send_json_success( [ 'exists' => true, 'valid' => true ] );
     }
 }

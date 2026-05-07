@@ -8,10 +8,10 @@ jQuery(function ($) {
         var value = $field.val();
         if (!value) return;
 
-        // Se o valor não mudou desde a última vez que disparou o alerta, ignora
+        // Evita repetir alerta para o mesmo valor
         if (_lastAlerted[type] === value) return;
 
-        // Se o valor não mudou desde a última requisição ainda em andamento, ignora
+        // Evita disparar a mesma requisição duas vezes seguidas
         if (_lastValue[type] === value) return;
 
         _lastValue[type] = value;
@@ -26,24 +26,37 @@ jQuery(function ($) {
             // Se o valor do campo mudou enquanto a requisição estava em andamento, ignora
             if ($field.val() !== value) return;
 
-            if (res.success && res.data.exists) {
-                $field.addClass('woocommerce-invalid');
+            if (!res.success) return;
 
-                // Registra o valor alertado para não repetir o alerta
+            var data = res.data || {};
+            var label = type.toUpperCase();
+
+            // 1. Documento inválido (dígitos verificadores incorretos)
+            if (data.valid === false) {
+                $field.addClass('woocommerce-invalid');
                 if (_lastAlerted[type] !== value) {
                     _lastAlerted[type] = value;
-                    alert(type.toUpperCase() + ' já cadastrado.');
+                    alert(label + ' inválido. Verifique os dígitos digitados.');
                 }
-
-            } else {
-                $field.removeClass('woocommerce-invalid');
-
-                // Reseta o controle se o usuário corrigiu o valor
-                if (_lastAlerted[type] === value) {
-                    delete _lastAlerted[type];
-                }
-                delete _lastValue[type];
+                return;
             }
+
+            // 2. Documento já cadastrado por outro usuário
+            if (data.exists) {
+                $field.addClass('woocommerce-invalid');
+                if (_lastAlerted[type] !== value) {
+                    _lastAlerted[type] = value;
+                    alert(label + ' já cadastrado.');
+                }
+                return;
+            }
+
+            // 3. Documento válido e disponível
+            $field.removeClass('woocommerce-invalid');
+            if (_lastAlerted[type] === value) {
+                delete _lastAlerted[type];
+            }
+            delete _lastValue[type];
         });
     }
 
