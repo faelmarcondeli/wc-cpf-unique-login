@@ -235,56 +235,44 @@ jQuery(function ($) {
     }
 
     // ====================================================================
-    // VALIDAÇÃO NO SUBMIT (bloqueia envio)
+    // VALIDAÇÃO SÍNCRONA NO SUBMIT (algoritmo + cache de duplicidade)
     // ====================================================================
+    // Não usa AJAX no submit — o servidor PHP faz a validação final.
+    // O AJAX já roda em tempo real conforme o usuário digita.
 
-    function validateBeforeSubmit($form) {
-
-        var promises = [];
+    function validateFormSync($form) {
         var firstError = '';
 
         ['cpf', 'cnpj'].forEach(function (type) {
+            if (firstError) return;
+
             var $field = $form.find(fieldSelector(type));
             if (!$field.length) return;
 
             var raw = onlyDigits($field.val());
             if (!raw) return;
 
-            // Comprimento errado
             if (raw.length !== expectedLength(type)) {
-                _state[type] = 'invalid';
                 setVisual($field, 'invalid');
-                if (!firstError) firstError = labelFor(type) + ' deve ter ' + expectedLength(type) + ' dígitos.';
+                firstError = labelFor(type) + ' deve ter ' + expectedLength(type) + ' dígitos.';
                 return;
             }
 
-            // Algoritmo
             if (!isValidDoc(raw, type)) {
-                _state[type] = 'invalid';
                 setVisual($field, 'invalid');
-                if (!firstError) firstError = messageFor('invalid', type);
+                firstError = messageFor('invalid', type);
                 return;
             }
 
-            // Duplicidade via AJAX
-            promises.push(
-                checkExistsAjax(raw, type).then(function (state) {
-                    _state[type] = state;
-                    setVisual($field, state);
-                    if ((state === 'invalid' || state === 'exists') && !firstError) {
-                        firstError = messageFor(state, type);
-                    }
-                })
-            );
+            // Só bloqueia por "exists" se a checagem AJAX já confirmou para ESSE valor
+            if (_state[type] === 'exists' && _lastValidatedValue[type] === raw) {
+                setVisual($field, 'exists');
+                firstError = messageFor('exists', type);
+                return;
+            }
         });
 
-        return $.when.apply($, promises).then(function () {
-            if (firstError) {
-                window.alert(firstError);
-                return false;
-            }
-            return true;
-        });
+        return firstError;
     }
 
     // ====================================================================
@@ -418,22 +406,21 @@ jQuery(function ($) {
 
         var $form = $(this);
 
-        if ($form.data('wcDocSubmitting')) return;
-
         var $cpf  = $form.find(fieldSelector('cpf'));
         var $cnpj = $form.find(fieldSelector('cnpj'));
 
+        // Sem campos de documento ou ambos vazios: não interfere com o submit
         if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) return;
 
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        var firstError = validateFormSync($form);
 
-        validateBeforeSubmit($form).then(function (canSubmit) {
-            if (canSubmit) {
-                $form.data('wcDocSubmitting', true);
-                $form.trigger('submit');
-            }
-        });
+        if (firstError) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            window.alert(firstError);
+            return false;
+        }
+        // Se passou: deixa o submit seguir normalmente (fluxo nativo + outros plugins)
     });
 
     // Bloqueio do checkout AJAX do WooCommerce
@@ -447,30 +434,9 @@ jQuery(function ($) {
 
         if ((!$cpf.length || !$cpf.val()) && (!$cnpj.length || !$cnpj.val())) return true;
 
-        // Validação síncrona local (algoritmo + comprimento)
-        var blocked = false;
-        var firstError = '';
-        ['cpf', 'cnpj'].forEach(function (type) {
-            var $field = $form.find(fieldSelector(type));
-            if (!$field.length || !$field.val()) return;
-            var raw = onlyDigits($field.val());
+        var firstError = validateFormSync($form);
 
-            if (raw.length !== expectedLength(type)) {
-                blocked = true;
-                if (!firstError) firstError = labelFor(type) + ' deve ter ' + expectedLength(type) + ' dígitos.';
-                setVisual($field, 'invalid');
-            } else if (!isValidDoc(raw, type)) {
-                blocked = true;
-                if (!firstError) firstError = messageFor('invalid', type);
-                setVisual($field, 'invalid');
-            } else if (_state[type] === 'exists') {
-                blocked = true;
-                if (!firstError) firstError = messageFor('exists', type);
-                setVisual($field, 'exists');
-            }
-        });
-
-        if (blocked) {
+        if (firstError) {
             window.alert(firstError);
             return false;
         }

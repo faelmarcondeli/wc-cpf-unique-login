@@ -4,6 +4,15 @@
 WordPress/WooCommerce plugin that provides CPF and CNPJ (Brazilian tax ID) unique validation and document-based login functionality. A standalone demo server showcases the validation logic.
 
 ## Recent Changes
+- 2026-05-07: Fix submit do cadastro em "Minha Conta" (v1.4.1)
+  - Substituído fluxo assíncrono `preventDefault → trigger('submit')` por validação síncrona
+  - Submit nativo só é bloqueado se documento for inválido localmente; caso contrário, segue para outros plugins (reCAPTCHA, password meter etc.) sem interferência
+  - Mesma função síncrona reutilizada no `checkout_place_order`
+- 2026-05-07: Robustez no checkout (v1.4.0)
+  - `beforeinput` event para bloqueio mais confiável que `keypress`
+  - `MutationObserver` para detectar campos inseridos dinamicamente
+  - CSS inline forçando feedback visual (`!important`)
+  - Atributos `inputmode="numeric"`, `maxlength`, `autocomplete="off"`
 - 2026-05-04: Revisão completa de consistência do plugin (v1.3.0)
   - Adicionada verificação de dependência do WooCommerce no bootstrap
   - Corrigido lock de campos para usar o ID do cliente editado (não do admin)
