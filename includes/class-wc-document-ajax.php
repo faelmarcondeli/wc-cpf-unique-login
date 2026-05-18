@@ -33,14 +33,14 @@ class WC_Document_Ajax {
             ? WC_Document_Unique_Login::META_CNPJ
             : WC_Document_Unique_Login::META_CPF;
 
-        $exists = WC_Document_Unique_Login::document_exists_for_other_user(
+        $is_dup = WC_Document_Unique_Login::is_duplicate_document(
             $meta_key,
             $doc,
             get_current_user_id()
         );
 
         wp_send_json_success( [
-            'exists' => (bool) $exists,
+            'exists' => (bool) $is_dup,
             'valid'  => true,
         ] );
     }

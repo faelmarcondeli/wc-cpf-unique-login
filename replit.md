@@ -4,6 +4,10 @@
 WordPress/WooCommerce plugin that provides CPF and CNPJ (Brazilian tax ID) unique validation and document-based login functionality. A standalone demo server showcases the validation logic.
 
 ## Recent Changes
+- 2026-05-07: Regra única de duplicidade que considera duplicatas legadas no banco (v1.4.3)
+  - Novo método `WC_Document_Unique_Login::is_duplicate_document($meta_key, $value, $current_user_id, $email)` consolida toda a lógica de duplicidade
+  - Antes de checar outros usuários, valida primeiro `user_owns_document()` — se o logado já é dono do CPF/CNPJ (mesmo com duplicatas legadas em outros usuários), libera incondicionalmente
+  - `validate_unique`, `validate_checkout` e AJAX (`wc_validate_document`) agora todos delegam para esse método único
 - 2026-05-07: Fix falso-positivo "CPF já cadastrado" para cliente logado (v1.4.2)
   - Novo método `WC_Document_Unique_Login::document_exists_for_other_user($meta_key, $value, $exclude_user_id)` que pergunta direto no SQL se existe doc em usuário diferente do informado (com `user_id != %d`)
   - Robusto contra dados legados duplicados — antes `get_user_by_document` retornava o primeiro match (LIMIT 1), que podia ser outro usuário e gerar falso-positivo

@@ -73,27 +73,8 @@ class WC_Document_Validator {
         }
     }
 
-    /**
-     * Verifica duplicidade ignorando:
-     * - O próprio usuário logado
-     * - Convidados cujo email é igual ao do dono do documento (mesma pessoa)
-     */
     private function is_duplicate( $meta_key, $value, $current_user_id, $email ) {
-
-        $found = WC_Document_Unique_Login::document_exists_for_other_user( $meta_key, $value, $current_user_id );
-
-        if ( ! $found ) {
-            return false;
-        }
-
-        if ( $email ) {
-            $found_user = get_userdata( $found );
-            if ( $found_user && strtolower( $found_user->user_email ) === $email ) {
-                return false;
-            }
-        }
-
-        return true;
+        return WC_Document_Unique_Login::is_duplicate_document( $meta_key, $value, $current_user_id, $email );
     }
 
     public function save_normalized( $customer_id ) {

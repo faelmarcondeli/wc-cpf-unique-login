@@ -153,6 +153,61 @@ class WC_Document_Unique_Login {
     }
 
     /**
+     * Verifica se o usuário informado já tem esse documento salvo (em qualquer formatação).
+     */
+    public static function user_owns_document( $user_id, $meta_key, $value ) {
+        $user_id = (int) $user_id;
+        if ( $user_id <= 0 ) {
+            return false;
+        }
+        $value = preg_replace( '/[^0-9]/', '', $value );
+        if ( empty( $value ) ) {
+            return false;
+        }
+        $own = get_user_meta( $user_id, $meta_key, true );
+        if ( empty( $own ) ) {
+            return false;
+        }
+        return preg_replace( '/[^0-9]/', '', $own ) === $value;
+    }
+
+    /**
+     * Regra única de duplicidade usada em todo o plugin (registro, checkout, AJAX).
+     *
+     * Não considera duplicado se:
+     *   1. O usuário logado já é dono desse documento.
+     *   2. O email informado bate com o do dono do documento (mesma pessoa em guest).
+     *
+     * @return bool true se for considerado duplicado.
+     */
+    public static function is_duplicate_document( $meta_key, $value, $current_user_id = 0, $email = '' ) {
+
+        $current_user_id = (int) $current_user_id;
+
+        // 1. Próprio usuário já é dono: nunca é duplicidade.
+        if ( self::user_owns_document( $current_user_id, $meta_key, $value ) ) {
+            return false;
+        }
+
+        // 2. Existe em algum OUTRO usuário?
+        $found = self::document_exists_for_other_user( $meta_key, $value, $current_user_id );
+        if ( ! $found ) {
+            return false;
+        }
+
+        // 3. Convidado/usuário com email igual ao dono: mesma pessoa, libera.
+        $email = strtolower( trim( $email ) );
+        if ( $email ) {
+            $found_user = get_userdata( $found );
+            if ( $found_user && strtolower( $found_user->user_email ) === $email ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Verifica se o documento pertence a algum usuário DIFERENTE do informado.
      * Robusto contra dados legados duplicados no banco.
      */
