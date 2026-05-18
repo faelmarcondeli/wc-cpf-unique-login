@@ -20,22 +20,16 @@ class WC_Document_Validator {
         }
         $already_validated = true;
 
+        $current_user_id = get_current_user_id();
+        $email_lower     = strtolower( $email );
+
         if ( ! empty( $_POST['billing_cpf'] ) ) {
             $cpf = WC_Document_Unique_Login::normalize( $_POST['billing_cpf'] );
 
             if ( ! WC_Document_Unique_Login::is_valid_cpf( $cpf ) ) {
                 $errors->add( 'cpf_invalid', __( 'CPF inválido. Verifique os dígitos digitados.', 'wc-cpf-unique-login' ) );
-            } else {
-                $found_user_id = WC_Document_Unique_Login::get_user_by_document(
-                    WC_Document_Unique_Login::META_CPF, $cpf
-                );
-
-                if ( $found_user_id ) {
-                    $found_user = get_userdata( $found_user_id );
-                    if ( ! $found_user || strtolower( $found_user->user_email ) !== strtolower( $email ) ) {
-                        $errors->add( 'cpf_exists', __( 'Este CPF já está cadastrado.', 'wc-cpf-unique-login' ) );
-                    }
-                }
+            } elseif ( $this->is_duplicate( WC_Document_Unique_Login::META_CPF, $cpf, $current_user_id, $email_lower ) ) {
+                $errors->add( 'cpf_exists', __( 'Este CPF já está cadastrado.', 'wc-cpf-unique-login' ) );
             }
         }
 
@@ -44,17 +38,8 @@ class WC_Document_Validator {
 
             if ( ! WC_Document_Unique_Login::is_valid_cnpj( $cnpj ) ) {
                 $errors->add( 'cnpj_invalid', __( 'CNPJ inválido. Verifique os dígitos digitados.', 'wc-cpf-unique-login' ) );
-            } else {
-                $found_user_id = WC_Document_Unique_Login::get_user_by_document(
-                    WC_Document_Unique_Login::META_CNPJ, $cnpj
-                );
-
-                if ( $found_user_id ) {
-                    $found_user = get_userdata( $found_user_id );
-                    if ( ! $found_user || strtolower( $found_user->user_email ) !== strtolower( $email ) ) {
-                        $errors->add( 'cnpj_exists', __( 'Este CNPJ já está cadastrado.', 'wc-cpf-unique-login' ) );
-                    }
-                }
+            } elseif ( $this->is_duplicate( WC_Document_Unique_Login::META_CNPJ, $cnpj, $current_user_id, $email_lower ) ) {
+                $errors->add( 'cnpj_exists', __( 'Este CNPJ já está cadastrado.', 'wc-cpf-unique-login' ) );
             }
         }
     }
@@ -64,20 +49,16 @@ class WC_Document_Validator {
      */
     public function validate_checkout( $data, $errors ) {
 
-        $current_user_id    = get_current_user_id();
-        $email              = isset( $data['billing_email'] ) ? strtolower( $data['billing_email'] ) : '';
-        $is_creating_account = ! empty( $data['createaccount'] );
+        $current_user_id = get_current_user_id();
+        $email           = isset( $data['billing_email'] ) ? strtolower( $data['billing_email'] ) : '';
 
         if ( ! empty( $data['billing_cpf'] ) ) {
             $cpf = WC_Document_Unique_Login::normalize( $data['billing_cpf'] );
 
             if ( ! WC_Document_Unique_Login::is_valid_cpf( $cpf ) ) {
                 $errors->add( 'cpf_invalid', __( 'CPF inválido. Verifique os dígitos digitados.', 'wc-cpf-unique-login' ) );
-            } else {
-                $found = WC_Document_Unique_Login::get_user_by_document( WC_Document_Unique_Login::META_CPF, $cpf );
-                if ( $found && $this->is_duplicate_for_checkout( $found, $current_user_id, $email, $is_creating_account ) ) {
-                    $errors->add( 'cpf_exists', __( 'Este CPF já está cadastrado.', 'wc-cpf-unique-login' ) );
-                }
+            } elseif ( $this->is_duplicate( WC_Document_Unique_Login::META_CPF, $cpf, $current_user_id, $email ) ) {
+                $errors->add( 'cpf_exists', __( 'Este CPF já está cadastrado.', 'wc-cpf-unique-login' ) );
             }
         }
 
@@ -86,29 +67,27 @@ class WC_Document_Validator {
 
             if ( ! WC_Document_Unique_Login::is_valid_cnpj( $cnpj ) ) {
                 $errors->add( 'cnpj_invalid', __( 'CNPJ inválido. Verifique os dígitos digitados.', 'wc-cpf-unique-login' ) );
-            } else {
-                $found = WC_Document_Unique_Login::get_user_by_document( WC_Document_Unique_Login::META_CNPJ, $cnpj );
-                if ( $found && $this->is_duplicate_for_checkout( $found, $current_user_id, $email, $is_creating_account ) ) {
-                    $errors->add( 'cnpj_exists', __( 'Este CNPJ já está cadastrado.', 'wc-cpf-unique-login' ) );
-                }
+            } elseif ( $this->is_duplicate( WC_Document_Unique_Login::META_CNPJ, $cnpj, $current_user_id, $email ) ) {
+                $errors->add( 'cnpj_exists', __( 'Este CNPJ já está cadastrado.', 'wc-cpf-unique-login' ) );
             }
         }
     }
 
     /**
-     * Decide se o documento encontrado caracteriza duplicidade no checkout.
-     * - Usuário logado comprando com seu próprio doc: OK
-     * - Convidado comprando com email igual ao do dono do doc: OK (mesma pessoa)
-     * - Caso contrário: duplicidade
+     * Verifica duplicidade ignorando:
+     * - O próprio usuário logado
+     * - Convidados cujo email é igual ao do dono do documento (mesma pessoa)
      */
-    private function is_duplicate_for_checkout( $found_user_id, $current_user_id, $email, $is_creating_account ) {
+    private function is_duplicate( $meta_key, $value, $current_user_id, $email ) {
 
-        if ( $current_user_id && (int) $found_user_id === (int) $current_user_id ) {
+        $found = WC_Document_Unique_Login::document_exists_for_other_user( $meta_key, $value, $current_user_id );
+
+        if ( ! $found ) {
             return false;
         }
 
-        if ( ! $is_creating_account && $email ) {
-            $found_user = get_userdata( $found_user_id );
+        if ( $email ) {
+            $found_user = get_userdata( $found );
             if ( $found_user && strtolower( $found_user->user_email ) === $email ) {
                 return false;
             }

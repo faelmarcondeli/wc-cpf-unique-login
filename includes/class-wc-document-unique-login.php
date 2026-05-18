@@ -151,4 +151,45 @@ class WC_Document_Unique_Login {
             $value
         ) );
     }
+
+    /**
+     * Verifica se o documento pertence a algum usuário DIFERENTE do informado.
+     * Robusto contra dados legados duplicados no banco.
+     */
+    public static function document_exists_for_other_user( $meta_key, $value, $exclude_user_id = 0 ) {
+        global $wpdb;
+
+        $value = preg_replace( '/[^0-9]/', '', $value );
+        if ( empty( $value ) ) {
+            return false;
+        }
+
+        $exclude_user_id = (int) $exclude_user_id;
+
+        if ( $exclude_user_id > 0 ) {
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT user_id
+                 FROM {$wpdb->usermeta}
+                 WHERE meta_key = %s
+                   AND user_id != %d
+                   AND REPLACE(REPLACE(REPLACE(meta_value, '.', ''), '-', ''), '/', '') = %s
+                 LIMIT 1",
+                $meta_key,
+                $exclude_user_id,
+                $value
+            ) );
+        } else {
+            $found = $wpdb->get_var( $wpdb->prepare(
+                "SELECT user_id
+                 FROM {$wpdb->usermeta}
+                 WHERE meta_key = %s
+                   AND REPLACE(REPLACE(REPLACE(meta_value, '.', ''), '-', ''), '/', '') = %s
+                 LIMIT 1",
+                $meta_key,
+                $value
+            ) );
+        }
+
+        return ! empty( $found ) ? (int) $found : false;
+    }
 }

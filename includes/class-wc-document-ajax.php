@@ -33,13 +33,15 @@ class WC_Document_Ajax {
             ? WC_Document_Unique_Login::META_CNPJ
             : WC_Document_Unique_Login::META_CPF;
 
-        $found_user_id = WC_Document_Unique_Login::get_user_by_document( $meta_key, $doc );
-        $current_user  = get_current_user_id();
+        $exists = WC_Document_Unique_Login::document_exists_for_other_user(
+            $meta_key,
+            $doc,
+            get_current_user_id()
+        );
 
-        if ( ! $found_user_id || ( $current_user && (int) $found_user_id === (int) $current_user ) ) {
-            wp_send_json_success( [ 'exists' => false, 'valid' => true ] );
-        }
-
-        wp_send_json_success( [ 'exists' => true, 'valid' => true ] );
+        wp_send_json_success( [
+            'exists' => (bool) $exists,
+            'valid'  => true,
+        ] );
     }
 }
