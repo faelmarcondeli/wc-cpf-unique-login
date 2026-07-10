@@ -4,6 +4,12 @@
 WordPress/WooCommerce plugin that provides CPF and CNPJ (Brazilian tax ID) unique validation and document-based login functionality. A standalone demo server showcases the validation logic.
 
 ## Recent Changes
+- 2026-05-07: Recuperação de senha por CPF/CNPJ (v1.5.0)
+  - Nova classe `WC_Document_Password_Reset` (class-wc-document-password-reset.php)
+  - Traduz CPF/CNPJ em `$_POST['user_login']` para o login real do usuário antes do handler de recuperação processar (cobre WooCommerce e wp-login.php, independente da versão)
+  - Também usa o filtro `lostpassword_user_data` (WP 5.7+) como caminho moderno
+  - Anti-ambiguidade: usa `get_all_users_by_document()`; se o documento existir em mais de um usuário (duplicata legada), aborta com segurança e orienta usar e-mail (não escolhe conta arbitrariamente)
+  - E-mail continua funcionando normalmente
 - 2026-05-07: Regra única de duplicidade que considera duplicatas legadas no banco (v1.4.3)
   - Novo método `WC_Document_Unique_Login::is_duplicate_document($meta_key, $value, $current_user_id, $email)` consolida toda a lógica de duplicidade
   - Antes de checar outros usuários, valida primeiro `user_owns_document()` — se o logado já é dono do CPF/CNPJ (mesmo com duplicatas legadas em outros usuários), libera incondicionalmente
@@ -51,6 +57,7 @@ WordPress/WooCommerce plugin that provides CPF and CNPJ (Brazilian tax ID) uniqu
 - `class-wc-document-lock.php` - Lock document fields after purchase
 - `class-wc-document-login-ui.php` - Login form UI modifications
 - `class-wc-document-block.php` - Bloqueio de login de clientes via wp-admin com exibição de mensagem personalizada
+- `class-wc-document-password-reset.php` - Recuperação de senha por CPF/CNPJ (traduz documento para login antes do handler)
 
 ## Constants
 - `WC_DOC_UL_VERSION` - Plugin version (used for script cache busting)

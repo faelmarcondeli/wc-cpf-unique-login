@@ -15,6 +15,7 @@ class WC_Document_Unique_Login {
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-ajax.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-lock.php';
         require_once WC_DOC_UL_PATH . 'includes/class-wc-document-block.php';
+        require_once WC_DOC_UL_PATH . 'includes/class-wc-document-password-reset.php';
 
         new WC_Document_Login_UI();
         new WC_Document_Validator();
@@ -22,6 +23,7 @@ class WC_Document_Unique_Login {
         new WC_Document_Ajax();
         new WC_Document_Lock();
         new WC_Document_Block();
+        new WC_Document_Password_Reset();
 
         add_action( 'wp_enqueue_scripts', [ __CLASS__, 'enqueue_scripts' ] );
     }
@@ -150,6 +152,32 @@ class WC_Document_Unique_Login {
             $meta_key,
             $value
         ) );
+    }
+
+    /**
+     * Retorna TODOS os IDs de usuários que possuem o documento (qualquer formatação).
+     * Útil para detectar ambiguidade causada por duplicatas legadas.
+     *
+     * @return int[]
+     */
+    public static function get_all_users_by_document( $meta_key, $value ) {
+        global $wpdb;
+
+        $value = preg_replace( '/[^0-9]/', '', $value );
+        if ( empty( $value ) ) {
+            return [];
+        }
+
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT DISTINCT user_id
+             FROM {$wpdb->usermeta}
+             WHERE meta_key = %s
+               AND REPLACE(REPLACE(REPLACE(meta_value, '.', ''), '-', ''), '/', '') = %s",
+            $meta_key,
+            $value
+        ) );
+
+        return array_map( 'intval', (array) $ids );
     }
 
     /**
